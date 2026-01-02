@@ -8,7 +8,8 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; font-family: 'Kanit', sans-serif; padding-bottom: 50px;}
+        body { background-color: #fffefb; font-family: 'Kanit', sans-serif; padding-bottom: 50px; color: #80332d; }
+        h4 { color: #80332d; font-weight: bold; }
         .table-box {
             width: 80px; height: 80px;
             margin: 10px auto;
@@ -16,20 +17,26 @@
             display: flex; flex-direction: column;
             justify-content: center; align-items: center;
             cursor: pointer; position: relative;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            transition: transform 0.2s;
+            box-shadow: 0 4px 10px rgba(128, 51, 45, 0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: bold;
         }
         .table-box:active { transform: scale(0.95); }
-        .available { background-color: #28a745; color: white; border: 2px solid #218838; }
-        .busy { background-color: #dc3545; color: white; border: 2px solid #c82333; opacity: 0.8; }
+        
+        /* Theme Colors: #80332d (Red/Brown), #ba9e6f (Gold) */
+        .available { background-color: #ba9e6f; color: white; border: 2px solid #a38b55; }
+        .busy { background-color: #80332d; color: white; border: 2px solid #5e2622; opacity: 0.9; }
+        
         .chair-icon { width: 10px; height: 10px; background: #333; border-radius: 50%; position: absolute; }
         
         /* Layout จัดให้เหมือนรูป */
-        .zone-title { margin-top: 20px; font-weight: bold; color: #555; }
-        .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 400px; margin: auto; }
+        .zone-title { margin-top: 20px; font-weight: bold; color: #80332d; font-size: 1.2rem; }
+        .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 400px; margin: auto; }
         
         /* Custom modal styles */
-        .modal-header { background: #ffc107; color: #000; }
+        .modal-header { background: #ba9e6f; color: white; border-bottom: none; }
+        .btn-primary { background-color: #80332d; border-color: #80332d; }
+        .btn-primary:hover { background-color: #6a2a25; border-color: #5e2622; }
     </style>
 </head>
 <body>
@@ -71,7 +78,7 @@
                         <input type="tel" class="form-control" id="input-phone" required>
                     </div>
                     <div class="mb-3">
-                        <label>เวลาที่จะเข้า (เช่น 18:30)</label>
+                        <label>เวลาที่จะเข้า (เช่น จองได้ไม่เกิน 2 ทุ่ม)</label>
                         <input type="time" class="form-control" id="input-time" required>
                     </div>
                     <button type="submit" class="btn btn-primary w-100">ยืนยันการจอง</button>
