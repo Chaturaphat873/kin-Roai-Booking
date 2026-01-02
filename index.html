@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>จองโต๊ะร้านอาหาร</title>
+    <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8f9fa; font-family: 'Kanit', sans-serif; padding-bottom: 50px;}
+        .table-box {
+            width: 80px; height: 80px;
+            margin: 10px auto;
+            border-radius: 12px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            cursor: pointer; position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .table-box:active { transform: scale(0.95); }
+        .available { background-color: #28a745; color: white; border: 2px solid #218838; }
+        .busy { background-color: #dc3545; color: white; border: 2px solid #c82333; opacity: 0.8; }
+        .chair-icon { width: 10px; height: 10px; background: #333; border-radius: 50%; position: absolute; }
+        
+        /* Layout จัดให้เหมือนรูป */
+        .zone-title { margin-top: 20px; font-weight: bold; color: #555; }
+        .grid-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 400px; margin: auto; }
+        
+        /* Custom modal styles */
+        .modal-header { background: #ffc107; color: #000; }
+    </style>
+</head>
+<body>
+
+<div class="container text-center mt-4">
+    <h4>🍴 ระบบจองโต๊ะ</h4>
+    <p id="welcome-msg" class="text-muted small">Loading...</p>
+    
+    <div id="admin-panel" class="alert alert-info d-none">
+        <strong>Admin Mode:</strong> คลิกที่โต๊ะสีแดงเพื่อเคลียร์ให้ว่าง
+    </div>
+
+    <div class="zone-title">โซนในร้าน (Air)</div>
+    <div class="grid-container" id="indoor-zone">
+        </div>
+
+    <hr>
+
+    <div class="zone-title">โซนหน้าร้าน (Outdoor)</div>
+    <div class="grid-container" id="outdoor-zone">
+        </div>
+</div>
+
+<div class="modal fade" id="bookingModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">จองโต๊ะ <span id="modal-table-no"></span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body text-start">
+                <form id="bookingForm">
+                    <div class="mb-3">
+                        <label>ชื่อเล่น</label>
+                        <input type="text" class="form-control" id="input-nickname" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>เบอร์โทร (บังคับ)</label>
+                        <input type="tel" class="form-control" id="input-phone" required>
+                    </div>
+                    <div class="mb-3">
+                        <label>เวลาที่จะเข้า (เช่น 18:30)</label>
+                        <input type="time" class="form-control" id="input-time" required>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100">ยืนยันการจอง</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const LIFF_ID = "YOUR_LIFF_ID"; 
+    const APPS_SCRIPT_URL = "YOUR_GOOGLE_SCRIPT_URL";
+
+    let userProfile = null;
+    let isAdmin = false;
+
+    // รายชื่อโต๊ะตามรูปภาพ
+    const indoorTables = [7, 8, 9, 6, 5, 4, 3, 2, 1]; // เรียงตามรูป
+    const outdoorTables = [10, 11, 12, 14]; 
+
+    async function main() {
+        await liff.init({ liffId: LIFF_ID });
+        if (!liff.isLoggedIn()) {
+            liff.login();
+            return;
+        }
+        
+        userProfile = await liff.getProfile();
+        document.getElementById('welcome-msg').innerText = `สวัสดี, ${userProfile.displayName}`;
+        
+        // เช็คว่าเป็นแอดมินไหม
+        checkAdminStatus();
+        
+        // ดึงสถานะโต๊ะ
+        fetchTableStatus();
+    }
+
+    async function checkAdminStatus() {
+        try {
+            const res = await fetch(`${APPS_SCRIPT_URL}?op=checkAdmin&userId=${userProfile.userId}`);
+            const data = await res.json();
+            if (data.isAdmin) {
+                isAdmin = true;
+                document.getElementById('admin-panel').classList.remove('d-none');
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    async function fetchTableStatus() {
+        Swal.fire({title: 'กำลังโหลด...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        
+        try {
+            const res = await fetch(`${APPS_SCRIPT_URL}?op=getStatus`);
+            const data = await res.json(); // [[1, 'Available', ''], [2, 'Busy', 'Bob'], ...]
+            Swal.close();
+            renderTables(data);
+        } catch (error) {
+            Swal.fire('Error', 'ไม่สามารถดึงข้อมูลได้', 'error');
+        }
+    }
+
+    function renderTables(statusData) {
+        // แปลง array เป็น object เพื่อง่ายต่อการค้นหา
+        const statusMap = {};
+        statusData.forEach(row => statusMap[row[0]] = row[1]); // {1: 'Available', 2: 'Busy'}
+
+        const createBox = (num) => {
+            const status = statusMap[num] || 'Available';
+            const cssClass = status === 'Available' ? 'available' : 'busy';
+            const icon = status === 'Available' ? '✅' : '❌';
+            return `
+                <div class="table-box ${cssClass}" onclick="handleTableClick(${num}, '${status}')">
+                    <h6>โต๊ะ ${num}</h6>
+                    <small>${icon}</small>
+                </div>
+            `;
+        };
+
+        document.getElementById('indoor-zone').innerHTML = indoorTables.map(num => createBox(num)).join('');
+        document.getElementById('outdoor-zone').innerHTML = outdoorTables.map(num => createBox(num)).join('');
+    }
+
+    window.handleTableClick = (tableNo, status) => {
+        if (isAdmin && status !== 'Available') {
+            // Admin Mode: Clear table
+            Swal.fire({
+                title: `Admin: เคลียร์โต๊ะ ${tableNo}?`,
+                text: "โต๊ะจะกลับมาว่างอีกครั้ง",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'ใช่, เคลียร์เลย'
+            }).then((result) => {
+                if (result.isConfirmed) updateTableStatus(tableNo, 'admin_clear');
+            });
+            return;
+        }
+
+        if (status !== 'Available') {
+            Swal.fire('เต็ม', 'โต๊ะนี้มีคนจองแล้วครับ', 'warning');
+            return;
+        }
+
+        // เปิด Modal จอง
+        document.getElementById('modal-table-no').innerText = tableNo;
+        window.currentTableBooking = tableNo;
+        new bootstrap.Modal(document.getElementById('bookingModal')).show();
+    };
+
+    document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const nickname = document.getElementById('input-nickname').value;
+        const phone = document.getElementById('input-phone').value;
+        const time = document.getElementById('input-time').value;
+
+        // ปิด modal
+        bootstrap.Modal.getInstance(document.getElementById('bookingModal')).hide();
+
+        const payload = {
+            action: 'book',
+            userId: userProfile.userId,
+            displayName: userProfile.displayName,
+            nickname: nickname,
+            phone: phone,
+            time: time,
+            tableNo: window.currentTableBooking
+        };
+
+        await sendData(payload);
+    });
+
+    async function updateTableStatus(tableNo, action) {
+        await sendData({
+            action: action,
+            userId: userProfile.userId,
+            tableNo: tableNo
+        });
+    }
+
+    async function sendData(payload) {
+        Swal.fire({title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        
+        try {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                mode: 'no-cors', // สำคัญสำหรับ GAS
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            
+            // เนื่องจาก no-cors เราจะอ่าน response ตรงๆ ไม่ได้ ให้ assume success แล้ว reload
+            // แต่เพื่อให้ชัวร์ ควรใช้เทคนิคอื่นหรือรอเวลาสักนิด
+            setTimeout(() => {
+                Swal.fire('สำเร็จ', 'ดำเนินการเรียบร้อย', 'success').then(() => fetchTableStatus());
+            }, 1500);
+
+        } catch (error) {
+            Swal.fire('Error', 'เกิดข้อผิดพลาด', 'error');
+        }
+    }
+
+    main();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
